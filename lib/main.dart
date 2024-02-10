@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'livetelemetry.dart';
+import 'InitialPage.dart';
 
 void main() {
-  runApp(const LiveTelemetry());
+  runApp(const InitailPage());
 }
