@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:win_ble/win_ble.dart';
 import 'package:win_ble/win_file.dart';
 import 'package:reorderable_grid/reorderable_grid.dart';
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'colors.dart';
 
 String eSPaddress = "ec:94:cb:6c:b0:be";
@@ -12,9 +13,11 @@ String charID = "0000dead-0000-1000-8000-00805f9b34fb";
 class Data {
   String name = "";
   double value = -1;
-  Data(String nm, double val) {
+  int order = -20;
+  Data(String nm, double val, int ord) {
     name = nm;
     value = val;
+    order = ord;
   }
   setName(String nm) {
     name = nm;
@@ -26,24 +29,30 @@ class Data {
 }
 
 List<Data> displayValues = [
-  Data("MPH", -1),
-  Data("RPM", -1),
-  Data("Voltage", -1),
-  Data("Water Temp", -1),
-  Data("Oil Temp", -1),
-  Data("Oil Pressure", -1),
-  Data("Fuel Pressure", -1),
-  Data("WHo knows", -1)
+  Data("MPH", -1, 0),
+  Data("RPM", -1, 1),
+  Data("Voltage", -1, 2),
+  Data("Water Temp", -1, 3),
+  Data("Oil Temp", -1, 4),
+  Data("Oil Pressure", -1, 5),
+  Data("Fuel Pressure", -1, 6),
+  Data("WHo knows", 15000, 7)
 ];
 
 class LiveTelemetry extends StatefulWidget {
   const LiveTelemetry({super.key});
 
   @override
-  _LiveTelemetryState createState() => _LiveTelemetryState();
+  State<LiveTelemetry> createState() => _LiveTelemetryState();
 }
 
 class _LiveTelemetryState extends State<LiveTelemetry> {
+  /*
+  0 = not connected
+  1 = attempting to connect
+  2 = connected
+  */
+  int conBtnState = 0;
   bool isBleConnected = false;
   StreamSubscription? scanStream;
   StreamSubscription? connectionStream;
@@ -54,12 +63,18 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
   BleState bleState = BleState.Unknown;
   BleDevice? esp;
   String error = "none";
+  String outPutText = "";
 
   void initialize() async {
     await WinBle.initialize(
       serverPath: await WinServer.path(),
     );
-    //TODO add initialize message
+
+    terminalPrint("Initialized");
+  }
+
+  terminalPrint(String newLine) {
+    outPutText = "$outPutText\n>$newLine";
   }
 
   @override
@@ -72,7 +87,7 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
         if (event.address == eSPaddress) {
           esp = event;
           connect(event.address);
-          //TODO add esp found print message
+          terminalPrint("ESP found");
           stopScanning();
         }
       });
@@ -87,6 +102,8 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
 
   startScanning() {
     WinBle.startScanning();
+    conBtnState = 1;
+    terminalPrint("Attempting to Connect");
   }
 
   stopScanning() {
@@ -96,20 +113,21 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
   connect(String address) async {
     try {
       await WinBle.connect(address);
-      //TODO add attempting connect message
 
-      // ignore: unused_local_variable
+      // ignore: unused_local_variable, no_leading_underscores_for_local_identifiers
       final StreamSubscription<List<int>> _readSub =
           _readController.stream.listen((event) {
         updateUIValues(event);
       });
       isBleConnected = true;
+      conBtnState = 2;
       readChar();
-      //TODO add reading BLE message
+      terminalPrint("Reading BLE messages");
     } catch (e) {
       setState(() {
         error = e.toString();
-        //TODO add error message
+
+        terminalPrint(e.toString());
       });
     }
   }
@@ -121,7 +139,12 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
     while (i < updatedValues.length) {
       if (updatedValues[i] == 44) {
         // ASCII code for comma
-        displayValues[j].setValue(numb);
+        //displayValues[j].setValue(numb);
+        for (int k = 0; k < displayValues.length; k++) {
+          if (j == displayValues[k].order) {
+            displayValues[k].setValue(numb);
+          }
+        }
         j++;
         i++;
         numb = 0;
@@ -131,16 +154,15 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
         i++;
       }
     }
-    print(displayValues[2].value);
     setState(() {});
   }
 
   readChar() async {
-    //TODO add isBLEConnected message
     while (isBleConnected) {
       _readController.sink.add(await WinBle.read(
           address: eSPaddress, serviceId: serviceID, characteristicId: charID));
     }
+    conBtnState = 0;
   }
 
   void _onReorder(int oldIndex, int newIndex) {
@@ -166,15 +188,32 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
                 padding: const EdgeInsets.fromLTRB(16.0, 4.0, 0, 0),
                 child: ElevatedButton(
                     onPressed: () {
-                      startScanning();
+                      switch (conBtnState) {
+                        case 0:
+                          startScanning();
+                          break;
+                        case 1:
+                          terminalPrint("have some patience damn");
+                          break;
+                        default:
+                        //TODO disconnect funtion time
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
                       foregroundColor: mainColor,
                     ),
-                    child: Text("Connect")),
-              ) //TODO make this change with the state
-              ),
+                    child: switch (conBtnState) {
+                      0 => const Text("Connect"),
+                      1 => LoadingAnimationWidget.newtonCradle(
+                          color: mainColor,
+                          size: 50,
+                        ),
+                      int() => const Text("Disconnect"),
+                    }
+                    //Text("Connect")
+                    ),
+              )),
           const Align(
             alignment: Alignment.center,
             child: Text(
@@ -194,7 +233,8 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
                       backgroundColor: accent,
                       foregroundColor: mainColor,
                     ),
-                    child: Text("Graphs Coming Soon")), //TODO far in the future
+                    child: const Text(
+                        "Graphs Coming Soon")), //TODO far in the future
               )),
         ]),
         const Divider(
@@ -203,13 +243,20 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
           color: mainColor,
         ),
         Expanded(
-          child: ReorderableGridView.extent(
-            maxCrossAxisExtent: 700,
+          child: ReorderableGridView.builder(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 700,
+              crossAxisSpacing: 16.0,
+              mainAxisSpacing: 16.0,
+              mainAxisExtent: 150,
+            ),
+            itemCount: displayValues.length,
             onReorder: _onReorder,
-            childAspectRatio: 3,
-            children: displayValues.map((datapoint) {
+            itemBuilder: (context, index) {
+              String displayTitle = displayValues[index].name;
+              double adjustableNumber = displayValues[index].value;
               return Card(
-                key: Key(datapoint.name),
+                key: Key(displayTitle),
                 color: accent,
                 child: SizedBox(
                   child: Column(children: [
@@ -217,7 +264,7 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
                       child: Align(
                         alignment: Alignment.center,
                         child: Text(
-                          datapoint.value.toString(),
+                          "$adjustableNumber",
                           style:
                               const TextStyle(color: background, fontSize: 50),
                         ),
@@ -229,7 +276,7 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
                       color: background,
                     ),
                     Text(
-                      datapoint.name,
+                      displayTitle,
                       style: const TextStyle(
                           color: background,
                           fontSize: 30,
@@ -238,14 +285,20 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
                   ]),
                 ),
               );
-            }
-
-                // return DisplayBox(
-                //     key: ValueKey(datapoint.name),
-                //     name: datapoint.name,
-                //     value: datapoint.value);
-                ).toList(),
+            },
           ),
+
+          // child: ReorderableGridView.extent(
+          //   maxCrossAxisExtent: 700,
+          //   onReorder: _onReorder,
+          //   childAspectRatio: 3,
+          //   children: displayValues.map((datapoint) {
+          //     return DisplayBox(
+          //         key: ValueKey(datapoint.name),
+          //         name: datapoint.name,
+          //         value: datapoint.value);
+          //   }).toList(),
+          // ),
         ),
         const Divider(
           height: 8.0,
@@ -253,14 +306,18 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
           color: mainColor,
         ),
         SizedBox(
-          height: 75,
-          child: Stack(
-            alignment: Alignment.center,
+          height: 100,
+          child: Row(
             children: [
               Expanded(
-                child: Text(
-                  "hi",
-                  style: TextStyle(color: accent),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      outPutText,
+                      style: const TextStyle(color: accent),
+                    ),
+                  ),
                 ),
               ),
               Padding(
@@ -279,70 +336,5 @@ class _LiveTelemetryState extends State<LiveTelemetry> {
         )
       ],
     ));
-  }
-}
-
-class DisplayBox extends StatefulWidget {
-  String name;
-  double value;
-  DisplayBox({
-    super.key,
-    required this.name,
-    required this.value,
-  });
-
-  @override
-  _DisplayBoxState createState() => _DisplayBoxState();
-}
-
-class _DisplayBoxState extends State<DisplayBox> {
-  String name = '';
-  double value = -1;
-  setName(String newName) {
-    name = newName;
-    setState(() {});
-  }
-
-  setValue(double newValue) {
-    value = newValue;
-    setState(() {});
-  }
-
-  @override
-  void initState() {
-    // TODO: implement initState
-    name = widget.name;
-    value = widget.value;
-    super.initState();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: accent,
-      child: SizedBox(
-        child: Column(children: [
-          Expanded(
-            child: Align(
-              alignment: Alignment.center,
-              child: Text(
-                "$value",
-                style: const TextStyle(color: background, fontSize: 50),
-              ),
-            ),
-          ),
-          const Divider(
-            height: 8.0,
-            thickness: 4.0,
-            color: background,
-          ),
-          Text(
-            name,
-            style: const TextStyle(
-                color: background, fontSize: 30, fontWeight: FontWeight.w500),
-          )
-        ]),
-      ),
-    );
   }
 }
