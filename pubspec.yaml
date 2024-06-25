@@ -38,6 +38,8 @@ dependencies:
   win_ble: ^1.1.1
   reorderable_grid: ^1.0.10
   loading_animation_widget: ^1.2.0+4
+  http: ^1.2.0
+  
 
   
 dev_dependencies:
@@ -50,7 +52,17 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^2.0.0
+  msix: ^3.16.7
 
+
+msix_config:
+  display_name: Live Telemetry
+  publisher_display_name: Midwest Racing Limited
+  identity_name: midwest.racing.telemetry
+  msix_version: 1.0.0.0
+  logo_path: C:\Users\caleb\OneDrive\Pictures\MRIcon.png
+  trim_logo: false
+  capabilities: internetClient
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

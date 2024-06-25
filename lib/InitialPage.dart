@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'livetelemetry.dart';
+//import 'livetelemetry.dart';
+import 'LiveTelemetryQB.dart';
 import 'colors.dart';
 
 class InitailPage extends StatelessWidget {
